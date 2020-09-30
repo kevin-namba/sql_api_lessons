@@ -38,7 +38,7 @@ func RandString(n int) string {
 
 func userGet(w http.ResponseWriter, r *http.Request) {
 
-  xtoken := r.Header.Get("token")
+  xtoken := r.Header.Get("xtoken")
   //fmt.Printf("xtoken:%s", xtoken)
 
   db, err := sql.Open("mysql", "root@/lesson1")
