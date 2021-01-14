@@ -25,3 +25,15 @@ create table gachatable(
        primary key(id));
 
 insert into gachatable (id,characterid) values (1,'chara1'),(2,'chara1'),(3,'chara1'),(4,'chara2'),(5,'chara2'),(6,'chara3');
+
+drop table if exists usercharacter;
+create table usercharacter(
+       usercharacterid varchar(20),
+       characterid varchar(20),
+       usertoken varchar(20),
+       primary key(usercharacterid)
+       );
+
+insert into usercharacter (usercharacterid,characterid,usertoken) values ('1','chara1','sampletoken1'),(2,'chara1','sampletoken1'),(3,'chara1','sampletoken1'),(4,'chara2','sampletoken1'),(5,'chara2','sampletoken2'),(6,'chara3','sampletoken3');
+
+

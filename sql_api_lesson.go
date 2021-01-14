@@ -46,8 +46,12 @@ type GachaDrawResponse struct{
 type UserCharacter struct{
     UserCharacterID string `json:"userCharacterID"`
     CharacterID string `json:"characterID"`
-    Name string 
+    Name string `json:"name"`
 
+}
+
+type CharacterListResponse struct{
+    Characters []UserCharacter `json:"characters"`
 }
 
 
@@ -73,10 +77,6 @@ func RandString(n int) string {
     return string(b)
 }
 
-func RandInt(n int)int {
-    rand.Seed(time.Now().Unix())
-    return rand.Intn(n)
-}
 
 
 
@@ -103,12 +103,9 @@ func userGet(w http.ResponseWriter, r *http.Request) {
        
     }
 
-    
-    defer db.Close()
     var person UserGetReponse 
     for rows.Next() {
-        
-    err :=rows.Scan(&person.Name)
+        err :=rows.Scan(&person.Name)
         
     if err != nil {
             panic(err.Error())
@@ -195,12 +192,12 @@ func userUpdate(w http.ResponseWriter, r *http.Request){
     log.Fatal(err)
    }
 
-ins.Exec()
-defer db.Close()
+    ins.Exec()
+    defer db.Close()
 }
 
 func gachaDraw(w http.ResponseWriter, r *http.Request){
-    //xtoken := r.Header.Get("x-token")
+    xtoken := r.Header.Get("x-token")
 
     var req GachaDrawRequest
     error := json.NewDecoder(r.Body).Decode(&req)
@@ -228,9 +225,11 @@ func gachaDraw(w http.ResponseWriter, r *http.Request){
         co +=1
     }
     var gacharesponse GachaDrawResponse
-
+    var gachatableid int
+    rand.Seed(time.Now().UnixNano())
     for i :=0;i<times;i++{
-        gachatableid:=RandInt(co)+1
+        gachatableid=rand.Intn(co)+1
+        print(gachatableid)
         
         row1, err := db.Query(fmt.Sprintf("SELECT characterid FROM gachatable WHERE id = %d ; ",gachatableid))
         if err != nil {
@@ -249,9 +248,22 @@ func gachaDraw(w http.ResponseWriter, r *http.Request){
         for row2.Next() {     
             error :=row2.Scan(&result.CharacterID,&result.Name)
             if error != nil {
-                panic(error.Error())
+             panic(error.Error())
             }
         }
+        
+        var newusercharacterid string
+        newusercharacterid =RandString(8)
+
+
+        ins, err := db.Prepare(fmt.Sprintf("INSERT INTO usercharacter(usercharacterid,characterid,usertoken) VALUES(?,?,?)"))
+        if err != nil {
+          log.Fatal(err)
+         }
+      
+        ins.Exec(newusercharacterid,result.CharacterID,xtoken)
+
+
 
         gacharesponse.Results=append(gacharesponse.Results,result)
 
@@ -265,6 +277,52 @@ func gachaDraw(w http.ResponseWriter, r *http.Request){
 
 }
 
+func characterList(w http.ResponseWriter, r *http.Request){
+    xtoken := r.Header.Get("x-token")
+
+    db, err := sql.Open("mysql", "root@/lesson1")
+    log.Println("Connected to mysql.")
+    //接続でエラーが発生した場合の処理
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    var characterlistresponse CharacterListResponse
+
+    row1, err := db.Query(fmt.Sprintf("SELECT usercharacterid , characterid FROM usercharacter WHERE usertoken = '%s' ; ",xtoken))
+    if err != nil {
+        log.Fatal(err)
+        }
+
+    for row1.Next() {
+        var usercharacter UserCharacter
+        error2 :=row1.Scan(&usercharacter.UserCharacterID,&usercharacter.CharacterID)
+        if error2 != nil {
+            panic(error2.Error())
+        }
+        row2, err := db.Query(fmt.Sprintf("SELECT name FROM characters WHERE characterid = '%s' ; ",usercharacter.CharacterID))
+        if err != nil {
+            log.Fatal(err)
+        }
+        for row2.Next() {     
+            error3 :=row2.Scan(&usercharacter.Name)
+            if error3 != nil {
+             panic(error3.Error())
+            }
+        }
+
+        characterlistresponse.Characters=append(characterlistresponse.Characters,usercharacter)
+
+    }
+    defer db.Close()
+
+    res, err := json.Marshal(characterlistresponse)
+    
+    w.Header().Set("Content-Type", "application/json")
+    w.Write(res)
+
+}
+
 func main() {    
     //req, _ := http.NewRequest("GET","localhost:8080" , nil)
     //req.Header.Set("Content-Type", "application/json")
@@ -272,6 +330,7 @@ func main() {
     http.HandleFunc("/user/create", userCreate)
     http.HandleFunc("/user/update", userUpdate)
     http.HandleFunc("/gacha/draw", gachaDraw)
+    http.HandleFunc("/character/list", characterList)
     
 
     log.Println("Server running...")
