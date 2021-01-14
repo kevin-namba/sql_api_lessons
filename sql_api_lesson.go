@@ -29,6 +29,32 @@ type UserUpdateRequest struct{
     Name string `json:"name"`
 }
 
+type GachaDrawRequest struct{
+    Times int `json:"times"`
+}
+
+type Gacharesult struct{
+    CharacterID string `json:"characterID"`
+    Name string `json:"name"`
+}
+
+
+type GachaDrawResponse struct{
+    Results []Gacharesult `json:"results"`
+}
+
+type UserCharacter struct{
+    UserCharacterID string `json:"userCharacterID"`
+    CharacterID string `json:"characterID"`
+    Name string 
+
+}
+
+
+
+
+
+
 
 
 
@@ -45,6 +71,11 @@ func RandString(n int) string {
         b[i] = rs1Letters[rand.Intn(len(rs1Letters))]
     }
     return string(b)
+}
+
+func RandInt(n int)int {
+    rand.Seed(time.Now().Unix())
+    return rand.Intn(n)
 }
 
 
@@ -168,12 +199,81 @@ ins.Exec()
 defer db.Close()
 }
 
+func gachaDraw(w http.ResponseWriter, r *http.Request){
+    //xtoken := r.Header.Get("x-token")
+
+    var req GachaDrawRequest
+    error := json.NewDecoder(r.Body).Decode(&req)
+    if error != nil {
+    fmt.Println(error)
+      return
+    }
+    times:=req.Times
+
+    db, err := sql.Open("mysql", "root@/lesson1")
+    log.Println("Connected to mysql.")
+    //接続でエラーが発生した場合の処理
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    rows, err := db.Query("SELECT * FROM gachatable")
+    defer rows.Close()
+    if err != nil {
+        panic(err.Error())
+    }
+
+    var co int
+    for rows.Next() {
+        co +=1
+    }
+    var gacharesponse GachaDrawResponse
+
+    for i :=0;i<times;i++{
+        gachatableid:=RandInt(co)+1
+        
+        row1, err := db.Query(fmt.Sprintf("SELECT characterid FROM gachatable WHERE id = %d ; ",gachatableid))
+        if err != nil {
+            log.Fatal(err)
+         }
+        var characterid string
+        for row1.Next() {        
+            error :=row1.Scan(&characterid)
+            if error != nil {
+                panic(error.Error())
+            }
+        }
+        
+        row2,err:=db.Query(fmt.Sprintf("SELECT * FROM characters WHERE characterid = '%s' ; ",characterid))
+        var result Gacharesult
+        for row2.Next() {     
+            error :=row2.Scan(&result.CharacterID,&result.Name)
+            if error != nil {
+                panic(error.Error())
+            }
+        }
+
+        gacharesponse.Results=append(gacharesponse.Results,result)
+
+    }
+    defer db.Close()
+
+    res, err := json.Marshal(gacharesponse)
+    
+    w.Header().Set("Content-Type", "application/json")
+    w.Write(res)
+
+}
+
 func main() {    
     //req, _ := http.NewRequest("GET","localhost:8080" , nil)
     //req.Header.Set("Content-Type", "application/json")
     http.HandleFunc("/user/get", userGet)
     http.HandleFunc("/user/create", userCreate)
     http.HandleFunc("/user/update", userUpdate)
+    http.HandleFunc("/gacha/draw", gachaDraw)
+    
+
     log.Println("Server running...")
   	err := http.ListenAndServe(":8080", nil)
   	if err != nil {
