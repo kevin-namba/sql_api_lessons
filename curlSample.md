@@ -1,5 +1,5 @@
 user/getへのリクエスト
-curl -X POST  -H "xtoken: rXYsplSo" -H "Content-Type: application/json" http://192.168.33.10:8080/user/get
+curl -X GET  -H "x-token: sampletoken1"   http://localhost:8080/user/get
 
 user/create
 curl -X POST  -H "Content-Type: application/json" -d '{"name":"kevin6"}'
