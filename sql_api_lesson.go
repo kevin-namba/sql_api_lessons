@@ -300,11 +300,28 @@ func gachaDraw(w http.ResponseWriter, r *http.Request) {
 		}
 
 		row2, err := db.Query(fmt.Sprintf("SELECT * FROM characters WHERE characterid = '%s' ; ", characterid))
+		if err != nil {
+			fmt.Println(err)
+			log.Printf("キャラクターテーブルを取得できませんでした")
+			var errormessage ErrorMeessage
+			errormessage.Error = "キャラクターテーブルを取得できませんでした"
+			res, _ := json.Marshal(errormessage)
+			w.Write(res)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 		var result Gacharesult
 		for row2.Next() {
 			error := row2.Scan(&result.CharacterID, &result.Name)
 			if error != nil {
-				panic(error.Error())
+				fmt.Println(error)
+				log.Printf("キャラクターテーブルを読み取れませんでした")
+				var errormessage ErrorMeessage
+				errormessage.Error = "キャラクターテーブルを読みとれませんでした"
+				res, _ := json.Marshal(errormessage)
+				w.Write(res)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
 			}
 		}
 
@@ -313,7 +330,14 @@ func gachaDraw(w http.ResponseWriter, r *http.Request) {
 
 		ins, err := db.Prepare(fmt.Sprintf("INSERT INTO usercharacter(usercharacterid,characterid,userid) VALUES(?,?,?)"))
 		if err != nil {
-			log.Fatal(err)
+			fmt.Println(err)
+			log.Printf("ユーザーキャラクターテーブルを更新できませんでした")
+			var errormessage ErrorMeessage
+			errormessage.Error = "ユーザーキャラクターテーブルを更新できませんでした"
+			res, _ := json.Marshal(errormessage)
+			w.Write(res)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
 
 		ins.Exec(newusercharacterid, result.CharacterID, userid)
@@ -322,7 +346,7 @@ func gachaDraw(w http.ResponseWriter, r *http.Request) {
 
 	}
 
-	res, err := json.Marshal(gacharesponse)
+	res, _ := json.Marshal(gacharesponse)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(res)
@@ -332,35 +356,67 @@ func gachaDraw(w http.ResponseWriter, r *http.Request) {
 func characterList(w http.ResponseWriter, r *http.Request) {
 	xtoken := r.Header.Get("x-token")
 
+	row, err := db.Query(fmt.Sprintf("SELECT id from users WHERE token = '%s' ;", xtoken))
+	if err != nil {
+		log.Printf("xtoken:%sのユーザーを取得できませんでした", xtoken)
+		var errormessage ErrorMeessage
+		errormessage.Error = "xtoken:" + xtoken + "のユーザーを取得できませんでした"
+		res, _ := json.Marshal(errormessage)
+		w.Write(res)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+
+	}
+
+	var userid string
+	for row.Next() {
+		err := row.Scan(&userid)
+
+		if err != nil {
+			log.Printf("xtoken:%sのユーザーを読み取れませんでした", xtoken)
+			var errormessage ErrorMeessage
+			errormessage.Error = "xtoken:" + xtoken + "のユーザーを読み取れませんでした"
+			res, _ := json.Marshal(errormessage)
+			w.Write(res)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+	}
+
 	var characterlistresponse CharacterListResponse
 
-	row1, err := db.Query(fmt.Sprintf("SELECT usercharacterid , characterid FROM usercharacter WHERE usertoken = '%s' ; ", xtoken))
+	row1, err := db.Query(fmt.Sprintf("SELECT usercharacter.usercharacterid , usercharacter.characterid,characters.name FROM usercharacter JOIN characters ON usercharacter.characterid = characters.characterid WHERE usercharacter.userid = '%s' ; ", userid))
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println(err)
+		log.Printf("ユーザーキャラクターテーブルを取得きませんでした")
+		var errormessage ErrorMeessage
+		errormessage.Error = "ユーザーキャラクターテーブルを取得きませんでした"
+		res, _ := json.Marshal(errormessage)
+		w.Write(res)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	for row1.Next() {
 		var usercharacter UserCharacter
-		error2 := row1.Scan(&usercharacter.UserCharacterID, &usercharacter.CharacterID)
+		error2 := row1.Scan(&usercharacter.UserCharacterID, &usercharacter.CharacterID,&usercharacter.Name)
 		if error2 != nil {
-			panic(error2.Error())
-		}
-		row2, err := db.Query(fmt.Sprintf("SELECT name FROM characters WHERE characterid = '%s' ; ", usercharacter.CharacterID))
-		if err != nil {
-			log.Fatal(err)
-		}
-		for row2.Next() {
-			error3 := row2.Scan(&usercharacter.Name)
-			if error3 != nil {
-				panic(error3.Error())
-			}
+			fmt.Println(err)
+			log.Printf("ユーザーキャラクターテーブルを読み込めませんでした")
+			var errormessage ErrorMeessage
+			errormessage.Error = "ユーザーキャラクターテーブルを取得きませんでした"
+			res, _ := json.Marshal(errormessage)
+			w.Write(res)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
 
 		characterlistresponse.Characters = append(characterlistresponse.Characters, usercharacter)
 
 	}
 
-	res, err := json.Marshal(characterlistresponse)
+	res, _ := json.Marshal(characterlistresponse)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(res)
