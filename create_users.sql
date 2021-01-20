@@ -20,20 +20,21 @@ insert into characters (characterid,name) values ('chara1','a'),('chara2','b'),(
 
 drop table if exists gachatable;
 create table gachatable(
-       id int unsigned,
        characterid varchar(20),
-       primary key(id));
+       rate float unsigned,
+       primary key(characterid)
+       );
 
-insert into gachatable (id,characterid) values (1,'chara1'),(2,'chara1'),(3,'chara1'),(4,'chara2'),(5,'chara2'),(6,'chara3');
+insert into gachatable (characterid,rate) values ('chara1',0.5),('chara2',0.3),('chara3',0.2);
 
 drop table if exists usercharacter;
 create table usercharacter(
        usercharacterid varchar(20),
        characterid varchar(20),
-       usertoken varchar(20),
+       userid varchar(20),
        primary key(usercharacterid)
        );
 
-insert into usercharacter (usercharacterid,characterid,usertoken) values ('1','chara1','sampletoken1'),(2,'chara1','sampletoken1'),(3,'chara1','sampletoken1'),(4,'chara2','sampletoken1'),(5,'chara2','sampletoken2'),(6,'chara3','sampletoken3');
+insert into usercharacter (usercharacterid,characterid,userid) values ('1','chara1','sample1'),(2,'chara1','sample1'),(3,'chara1','sample1'),(4,'chara2','sample1'),(5,'chara2','sample2'),(6,'chara3','sample3');
 
 
