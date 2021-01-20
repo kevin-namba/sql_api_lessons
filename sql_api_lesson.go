@@ -209,6 +209,35 @@ func userUpdate(w http.ResponseWriter, r *http.Request) {
 func gachaDraw(w http.ResponseWriter, r *http.Request) {
 	xtoken := r.Header.Get("x-token")
 
+
+	row, err := db.Query(fmt.Sprintf("SELECT id from users WHERE token = '%s' ;", xtoken))
+	if err != nil {
+		log.Printf("xtoken:%sのユーザーを取得できませんでした", xtoken)
+		var errormessage ErrorMeessage
+		errormessage.Error = "xtoken:" + xtoken + "のユーザーを取得できませんでした"
+		res, _ := json.Marshal(errormessage)
+		w.Write(res)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+
+	}
+
+	var userid string
+	for row.Next() {
+		err := row.Scan(&userid)
+
+		if err != nil {
+			log.Printf("xtoken:%sのユーザーを読み取れませんでした", xtoken)
+			var errormessage ErrorMeessage
+			errormessage.Error = "xtoken:" + xtoken + "のユーザーを読み取れませんでした"
+			res, _ := json.Marshal(errormessage)
+			w.Write(res)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+	}
+
 	var req GachaDrawRequest
 	error := json.NewDecoder(r.Body).Decode(&req)
 	if error != nil {
@@ -226,7 +255,13 @@ func gachaDraw(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.Query("SELECT * FROM gachatable")
 	if err != nil {
 		fmt.Println(err)
-		log.Printf("が茶テーブルから取得できませんでした")
+		log.Printf("排出率テーブルから取得できませんでした")
+		var errormessage ErrorMeessage
+		errormessage.Error = "排出率テーブルから取得できませんでした"
+		res, _ := json.Marshal(errormessage)
+		w.Write(res)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	var rates []Rate
@@ -237,7 +272,13 @@ func gachaDraw(w http.ResponseWriter, r *http.Request) {
 		error:=rows.Scan(&rate.CharacterID,&a)
 		if error != nil {
 			fmt.Println(error)
-			log.Printf("レコードを読み取れませんでした")
+			log.Printf("排出率テーブルを読み取れませんでした")
+			var errormessage ErrorMeessage
+			errormessage.Error = "排出率テーブルを読みとれませんでした"
+			res, _ := json.Marshal(errormessage)
+			w.Write(res)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
 		}
 		ratesum = ratesum+a
 		rate.Ratesum=ratesum
@@ -275,7 +316,7 @@ func gachaDraw(w http.ResponseWriter, r *http.Request) {
 			log.Fatal(err)
 		}
 
-		ins.Exec(newusercharacterid, result.CharacterID, xtoken)
+		ins.Exec(newusercharacterid, result.CharacterID, userid)
 
 		gacharesponse.Results = append(gacharesponse.Results, result)
 
