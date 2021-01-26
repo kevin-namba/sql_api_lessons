@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/pkg/errors"
 	"log"
 	"math/rand"
 	"net/http"
@@ -54,9 +55,9 @@ type ErrorMeessage struct {
 	Error string `json:"errors"`
 }
 
-type Rate struct{
+type Rate struct {
 	CharacterID string
-	Ratesum float32 
+	Ratesum     float32
 }
 
 var db *sql.DB
@@ -209,7 +210,6 @@ func userUpdate(w http.ResponseWriter, r *http.Request) {
 func gachaDraw(w http.ResponseWriter, r *http.Request) {
 	xtoken := r.Header.Get("x-token")
 
-
 	row, err := db.Query(fmt.Sprintf("SELECT id from users WHERE token = '%s' ;", xtoken))
 	if err != nil {
 		log.Printf("xtoken:%sのユーザーを取得できませんでした", xtoken)
@@ -269,7 +269,7 @@ func gachaDraw(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var rate Rate
 		var a float32
-		error:=rows.Scan(&rate.CharacterID,&a)
+		error := rows.Scan(&rate.CharacterID, &a)
 		if error != nil {
 			fmt.Println(error)
 			log.Printf("排出率テーブルを読み取れませんでした")
@@ -280,27 +280,42 @@ func gachaDraw(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		ratesum = ratesum+a
-		rate.Ratesum=ratesum
-		rates=append(rates,rate)
+		ratesum = ratesum + a
+		rate.Ratesum = ratesum
+		rates = append(rates, rate)
 
 	}
 
 	var gacharesponse GachaDrawResponse
 	var gachatablerate float32
-	var characterid string 
+	var characterid string
 	rand.Seed(time.Now().UnixNano())
 	for i := 0; i < times; i++ {
-		gachatablerate = rand.Float32()/ratesum
-		for i := 0; i < len(rates); i++{
-			if (gachatablerate < rates[i].Ratesum){
+
+		gachatablerate = rand.Float32() / ratesum
+		for i := 0; i < len(rates); i++ {
+			if gachatablerate < rates[i].Ratesum {
 				characterid = rates[i].CharacterID
 				break
 			}
 		}
-
-		row2, err := db.Query(fmt.Sprintf("SELECT * FROM characters WHERE characterid = '%s' ; ", characterid))
+		tx, err := db.Begin()
 		if err != nil {
+			fmt.Println(err)
+			log.Printf("トランザクションを開始できませんでした")
+			var errormessage ErrorMeessage
+			errormessage.Error = "トランザクションを開始できませんでした"
+			res, _ := json.Marshal(errormessage)
+			w.Write(res)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		row2, err := tx.Query(fmt.Sprintf("SELECT * FROM characters WHERE characterid = '%s' ; ", characterid))
+		if err != nil {
+			if re := tx.Rollback(); re != nil {
+				// wrap error
+				err = errors.Wrap(err, re.Error())
+			}
 			fmt.Println(err)
 			log.Printf("キャラクターテーブルを取得できませんでした")
 			var errormessage ErrorMeessage
@@ -314,6 +329,10 @@ func gachaDraw(w http.ResponseWriter, r *http.Request) {
 		for row2.Next() {
 			error := row2.Scan(&result.CharacterID, &result.Name)
 			if error != nil {
+				if re := tx.Rollback(); re != nil {
+					// wrap error
+					err = errors.Wrap(err, re.Error())
+				}
 				fmt.Println(error)
 				log.Printf("キャラクターテーブルを読み取れませんでした")
 				var errormessage ErrorMeessage
@@ -328,8 +347,12 @@ func gachaDraw(w http.ResponseWriter, r *http.Request) {
 		var newusercharacterid string
 		newusercharacterid = RandString(8)
 
-		ins, err := db.Prepare(fmt.Sprintf("INSERT INTO usercharacter(usercharacterid,characterid,userid) VALUES(?,?,?)"))
+		_, err = tx.Exec(fmt.Sprintf("INSERT INTO usercharacter(usercharacterid,characterid,userid) VALUES('%s','%s','%s')", newusercharacterid, result.CharacterID, userid))
 		if err != nil {
+			if re := tx.Rollback(); re != nil {
+				// wrap error
+				err = errors.Wrap(err, re.Error())
+			}
 			fmt.Println(err)
 			log.Printf("ユーザーキャラクターテーブルを更新できませんでした")
 			var errormessage ErrorMeessage
@@ -340,7 +363,13 @@ func gachaDraw(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		ins.Exec(newusercharacterid, result.CharacterID, userid)
+		if err := tx.Commit(); err != nil {
+			if re := tx.Rollback(); re != nil {
+				// wrap error
+				err = errors.Wrap(err, re.Error())
+			}
+			return
+		}
 
 		gacharesponse.Results = append(gacharesponse.Results, result)
 
@@ -400,7 +429,7 @@ func characterList(w http.ResponseWriter, r *http.Request) {
 
 	for row1.Next() {
 		var usercharacter UserCharacter
-		error2 := row1.Scan(&usercharacter.UserCharacterID, &usercharacter.CharacterID,&usercharacter.Name)
+		error2 := row1.Scan(&usercharacter.UserCharacterID, &usercharacter.CharacterID, &usercharacter.Name)
 		if error2 != nil {
 			fmt.Println(err)
 			log.Printf("ユーザーキャラクターテーブルを読み込めませんでした")
